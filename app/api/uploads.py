@@ -77,8 +77,7 @@ async def upload_file(
                 )
         
         # Upload to Supabase Storage
-        base_storage_path = intake["storage_path"].replace("/raw.txt", "")
-        storage_path = f"{base_storage_path}/{file.filename}"
+        storage_path = f"{intake['storage_path']}{file.filename}"
         
         # Create the file in storage
         storage_result = get_supabase_client().storage.from_("intakes-raw").upload(
@@ -158,8 +157,7 @@ async def upload_pasted_text(
         original_filename = f"{x_org_id}-pasted-{timestamp}.txt"
         
         # Upload to Supabase Storage
-        base_storage_path = intake["storage_path"].replace("/raw.txt", "")
-        storage_path = f"{base_storage_path}/{original_filename}"
+        storage_path = f"{intake['storage_path']}{original_filename}"
         
         # Create the file in storage
         storage_result = get_supabase_client().storage.from_("intakes-raw").upload(

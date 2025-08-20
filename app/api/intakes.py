@@ -38,7 +38,7 @@ async def init_intake(
         intake_id = str(uuid.uuid4())
         
         # Generate storage path according to doc pattern
-        storage_path = f"org/{x_org_id}/intake/{intake_id}/raw.txt"
+        storage_path = f"org/{x_org_id}/intake/{intake_id}/"
         
         # Insert into database
         result = get_supabase_client().table("intakes").insert({

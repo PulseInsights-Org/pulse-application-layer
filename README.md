@@ -40,7 +40,9 @@ curl -X POST "http://localhost:8000/api/intakes.init" \
   -H "x-org-id: pulse-dev" \
   -H "x-idempotency-key: 550e8400-e29b-41d4-a716-446655440001"
 ```
-
+**Note**: 
+- Ideally `x-idempotency-key` will be generated on the client side. For the sake for testing the API we are hardcoding this.
+- assuming x-org-id as `pulse-dev` change if required
 ### Upload File (supports .txt and .md files)
 ```bash
 curl -X POST "http://localhost:8000/api/upload/file/{intake_id}" \
