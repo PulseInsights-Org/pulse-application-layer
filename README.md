@@ -37,40 +37,29 @@ The API will be available at `http://localhost:8000`
 ### Initialize Intake
 ```bash
 curl -X POST "http://localhost:8000/api/intakes.init" \
-  -H "x-org-id: your-org-id" \
+  -H "x-org-id: pulse-dev" \
   -H "x-idempotency-key: 550e8400-e29b-41d4-a716-446655440001"
 ```
 
-**Response:**
-```json
-{
-  "intake_id": "generated-uuid",
-  "storage_path": "org/your-org-id/intake/generated-uuid/raw.txt"
-}
+### Upload File (supports .txt and .md files)
+```bash
+curl -X POST "http://localhost:8000/api/upload/file/{intake_id}" \
+  -H "x-org-id: pulse-dev" \
+  -F "file=@meeting-notes.txt"
+```
+
+### Upload Text (uploading copy pasted text via UI)
+```bash
+curl -X POST "http://localhost:8000/api/upload/text/{intake_id}" \
+  -H "x-org-id: pulse-dev" \
+  -F "text_content=Meeting summary: Discussed Q4 goals..."
 ```
 
 ### Get Intake Status
 ```bash
 curl -X GET "http://localhost:8000/api/intakes/{intake_id}" \
-  -H "x-org-id: your-org-id"
+  -H "x-org-id: pulse-dev"
 ```
-
-**Response:**
-```json
-{
-  "id": "intake-uuid",
-  "org_id": "your-org-id",
-  "status": "initialized",
-  "storage_path": "org/your-org-id/intake/intake-uuid/raw.txt",
-  "idempotency_key": "550e8400-e29b-41d4-a716-446655440001",
-  "created_at": "2024-01-01T00:00:00Z"
-}
-```
-
-## Headers Required
-
-- **`x-org-id`**: Organization identifier (required for all endpoints)
-- **`x-idempotency-key`**: Unique key for idempotent operations (required for POST endpoints)
 
 ## Database Schema
 
@@ -82,6 +71,13 @@ curl -X GET "http://localhost:8000/api/intakes/{intake_id}" \
 - `idempotency_key`: Idempotency key
 - `created_at`: Creation timestamp
 - `updated_at`: Last update timestamp
+
+## Supabase Storage Bucket folder structure
+
+```
+intakes-raw/org/pulse-dev/intake/{intake_id}/filename.txt
+```
+
 
 ## Tech Stack
 
