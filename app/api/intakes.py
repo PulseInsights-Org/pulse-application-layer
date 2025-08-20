@@ -72,6 +72,87 @@ async def init_intake(
         
         raise HTTPException(status_code=500, detail=f"Error creating intake: {str(e)}")
 
+@router.post("/intakes/{intake_id}/verify")
+async def verify_intake(
+    intake_id: str,
+    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
+):
+    """
+    Verify that uploaded file exists in storage and update intake status.
+    Changes status from 'uploading' to 'ready' if file exists, or to 'error' if not.
+    """
+    try:
+        # Get intake record
+        intake_result = get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
+        
+        if not intake_result.data:
+            raise HTTPException(status_code=404, detail="Intake not found")
+        
+        intake = intake_result.data[0]
+        
+        # Check if intake is in valid state for verification
+        if intake["status"] != "uploading":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot verify intake with status: {intake['status']}. Expected 'uploading'."
+            )
+        
+        # List files in the intake's storage path to check if any files exist
+        try:
+            storage_path = intake["storage_path"]
+            # Remove trailing slash for proper path handling
+            path_for_listing = storage_path.rstrip('/')
+            
+            files_result = get_supabase_client().storage.from_("intakes-raw").list(path_for_listing)
+            
+            # Check if any files exist in the directory
+            if files_result and len(files_result) > 0:
+                # File(s) found - mark as ready
+                get_supabase_client().table("intakes").update({
+                    "status": "ready",
+                    "next_retry_at": "now()"
+                }).eq("id", intake_id).execute()
+                
+                return {
+                    "message": "File verification successful",
+                    "intake_id": intake_id,
+                    "status": "ready",
+                    "files_found": len(files_result)
+                }
+            else:
+                # No files found - mark as error
+                get_supabase_client().table("intakes").update({
+                    "status": "error",
+                    "last_error": "No files found in storage path after upload"
+                }).eq("id", intake_id).execute()
+                
+                return {
+                    "message": "File verification failed",
+                    "intake_id": intake_id,
+                    "status": "error",
+                    "error": "No files found in storage path"
+                }
+                
+        except Exception as storage_error:
+            # Storage access error - mark as error
+            error_message = f"Storage verification failed: {str(storage_error)}"
+            get_supabase_client().table("intakes").update({
+                "status": "error",
+                "last_error": error_message
+            }).eq("id", intake_id).execute()
+            
+            return {
+                "message": "File verification failed",
+                "intake_id": intake_id,
+                "status": "error",
+                "error": error_message
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error verifying intake: {str(e)}")
+
 @router.get("/intakes/{intake_id}")
 async def get_intake(
     intake_id: str,

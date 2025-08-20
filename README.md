@@ -63,6 +63,12 @@ curl -X GET "http://localhost:8000/api/intakes/{intake_id}" \
   -H "x-org-id: pulse-dev"
 ```
 
+### Verify Intake Status (updates the uploading status to ready if file exists in the storage path)
+```bash
+curl -X POST "http://localhost:8000/api/intakes/{intake_id}/verify" \
+  -H "x-org-id: pulse-dev"
+```
+
 ## Database Schema
 
 ### Intakes Table
