@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid
 import os
+import hashlib
 from supabase import create_client, Client
 
 # Supabase client will be initialized lazily
@@ -72,14 +73,14 @@ async def init_intake(
         
         raise HTTPException(status_code=500, detail=f"Error creating intake: {str(e)}")
 
-@router.post("/intakes/{intake_id}/verify")
-async def verify_intake(
+@router.post("/intakes/{intake_id}/finalize")
+async def finalize_intake(
     intake_id: str,
     x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
 ):
     """
-    Verify that uploaded file exists in storage and update intake status.
-    Changes status from 'uploading' to 'ready' if file exists, or to 'error' if not.
+    Finalize intake by verifying file exists, calculating checksum and size.
+    Changes status from 'uploading' to 'ready' if file exists and validation passes, or to 'error' if not.
     """
     try:
         # Get intake record
@@ -90,11 +91,12 @@ async def verify_intake(
         
         intake = intake_result.data[0]
         
-        # Check if intake is in valid state for verification
-        if intake["status"] != "uploading":
+        # Check if intake is in valid state for finalization
+        valid_statuses = ["uploading", "error-uploading"]
+        if intake["status"] not in valid_statuses:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Cannot verify intake with status: {intake['status']}. Expected 'uploading'."
+                detail=f"Cannot finalize intake with status: {intake['status']}. Expected one of: {', '.join(valid_statuses)}."
             )
         
         # List files in the intake's storage path to check if any files exist
@@ -107,51 +109,66 @@ async def verify_intake(
             
             # Check if any files exist in the directory
             if files_result and len(files_result) > 0:
-                # File(s) found - mark as ready
+                # Calculate checksum and size for the first file
+                file_info = files_result[0]
+                file_path = f"{path_for_listing}/{file_info['name']}"
+                
+                # Download file content to calculate checksum and size
+                file_content = get_supabase_client().storage.from_("intakes-raw").download(file_path)
+                
+                # Calculate MD5 checksum and size
+                checksum = hashlib.md5(file_content).hexdigest()
+                file_size = len(file_content)
+                
+                # File(s) found - mark as ready with checksum and size
                 get_supabase_client().table("intakes").update({
                     "status": "ready",
-                    "next_retry_at": "now()"
+                    "next_retry_at": "now()",
+                    "checksum": checksum,
+                    "size_bytes": file_size
                 }).eq("id", intake_id).execute()
                 
                 return {
-                    "message": "File verification successful",
+                    "message": "Intake finalization successful",
                     "intake_id": intake_id,
                     "status": "ready",
-                    "files_found": len(files_result)
+                    "files_found": len(files_result),
+                    "checksum": checksum,
+                    "file_size": file_size
                 }
             else:
-                # No files found - mark as error
+                # No files found - mark as error-uploading
                 get_supabase_client().table("intakes").update({
-                    "status": "error",
+                    "status": "error-uploading",
                     "last_error": "No files found in storage path after upload"
                 }).eq("id", intake_id).execute()
                 
                 return {
-                    "message": "File verification failed",
+                    "message": "Intake finalization failed",
                     "intake_id": intake_id,
-                    "status": "error",
+                    "status": "error-uploading",
                     "error": "No files found in storage path"
                 }
                 
         except Exception as storage_error:
-            # Storage access error - mark as error
-            error_message = f"Storage verification failed: {str(storage_error)}"
+            # Storage access error - mark as error-uploading
+            error_message = f"Storage finalization failed: {str(storage_error)}"
             get_supabase_client().table("intakes").update({
-                "status": "error",
+                "status": "error-uploading",
                 "last_error": error_message
             }).eq("id", intake_id).execute()
             
             return {
-                "message": "File verification failed",
+                "message": "Intake finalization failed",
                 "intake_id": intake_id,
-                "status": "error",
+                "status": "error-uploading",
                 "error": error_message
             }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error verifying intake: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error finalizing intake: {str(e)}")
 
 @router.get("/intakes/{intake_id}")
 async def get_intake(

@@ -63,9 +63,9 @@ curl -X GET "http://localhost:8000/api/intakes/{intake_id}" \
   -H "x-org-id: pulse-dev"
 ```
 
-### Verify Intake Status (updates the uploading status to ready if file exists in the storage path)
+### Finalize Intake (validates file exists, calculates checksum and size, then marks as ready)
 ```bash
-curl -X POST "http://localhost:8000/api/intakes/{intake_id}/verify" \
+curl -X POST "http://localhost:8000/api/intakes/{intake_id}/finalize" \
   -H "x-org-id: pulse-dev"
 ```
 
