@@ -23,7 +23,7 @@ class InitIntakeResponse(BaseModel):
     intake_id: str
     storage_path: str
 
-@router.post("/intakes.init", response_model=InitIntakeResponse)
+@router.post("/intakes/init", response_model=InitIntakeResponse)
 async def init_intake(
     x_org_id: str = Header(..., alias="x-org-id", description="Organization ID"),
     x_idempotency_key: str = Header(..., alias="x-idempotency-key", description="Idempotency Key")
