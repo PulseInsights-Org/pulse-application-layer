@@ -77,7 +77,12 @@ class IntakeProcessor:
             # Step 3: Initialize extraction engine
             logger.info("Initializing extraction engine")
             try:
-                gemini_model = GeminiModel()
+                # Get the API key from tenant secrets
+                api_key = self.config.get_secret("model_api_key")
+                if not api_key:
+                    raise ValueError("Gemini API key not found in tenant configuration")
+                
+                gemini_model = GeminiModel(api_key=api_key)
                 extraction_engine = Extraction(gemini_model)
             except Exception as e:
                 error_msg = f"Failed to initialize extraction engine: {str(e)}"
