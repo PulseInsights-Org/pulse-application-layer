@@ -1,3 +1,4 @@
+# .github/workflows/deploy.yml
 name: Deploy Pulse to Production
 
 on:
@@ -172,6 +173,10 @@ jobs:
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 📂 Add server to known hosts for rollback
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
       - name: 🔙 Execute rollback
         run: |
