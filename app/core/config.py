@@ -36,6 +36,9 @@ class Config:
         self.worker_base_retry_delay = int(os.getenv("WORKER_BASE_RETRY_DELAY", "60"))
         self.worker_stats_log_interval = int(os.getenv("WORKER_STATS_LOG_INTERVAL", "300"))
         
+        # Pulse API configuration
+        self.pulse_api_base_url = os.getenv("PULSE_API_BASE_URL", "http://localhost:8000")
+        
         self.secrets: Dict[str, Any] = {}
         self.tenant_id: Optional[str] = None
         
@@ -111,39 +114,15 @@ class Config:
         """Get a secret value by key."""
         return self.secrets.get(key, default)
     
-    def get_gemini_config(self) -> Dict[str, str]:
-        """Get Gemini AI configuration."""
+
+    
+    def get_pulse_api_config(self) -> Dict[str, str]:
+        """Get Pulse API configuration."""
         return {
-            "api_key": self.get_secret("model_api_key"),
-            "model_name": self.get_secret("model_name", "gemini-1.5-flash")
+            "base_url": self.pulse_api_base_url
         }
     
-    def get_pinecone_config(self) -> Dict[str, str]:
-        """Get Pinecone vector database configuration."""
-        return {
-            "api_key": self.get_secret("pinecone_api_key"),
-            "index_name": self.get_secret("pinecone_index")
-        }
-    
-    def get_neo4j_config(self) -> Dict[str, str]:
-        """Get Neo4j graph database configuration."""
-        return {
-            "uri": self.get_secret("neo4j_uri"),
-            "user": self.get_secret("neo4j_user"),
-            "password": self.get_secret("neo4j_password"),
-            "database": self.get_secret("neo4j_database")
-        }
-    
-    def has_tenant_secrets(self) -> bool:
-        """Check if tenant secrets are loaded."""
-        return bool(self.secrets and self.tenant_id)
-    
-    def clear_cache(self, tenant_id: str = None):
-        """Clear secrets cache."""
-        if tenant_id:
-            _secrets_cache.pop(tenant_id, None)
-        else:
-            _secrets_cache.clear()
+
 
 # Global config instance
 config = Config()

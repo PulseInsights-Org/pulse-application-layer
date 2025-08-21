@@ -59,7 +59,7 @@ if __name__ == "__main__":
     
     import uvicorn
     try:
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="0.0.0.0", port=8001)
     except KeyboardInterrupt:
         logging.info("FastAPI server interrupted")
         worker_manager.stop_worker()
