@@ -57,7 +57,7 @@ class IntakeProcessor:
             logger.info(f"Loading tenant configuration for org {config_org_id}")
             
             if not self.config.load_tenant_secrets(config_org_id):
-                error_msg = f"Failed to load tenant configuration for org {org_id}"
+                error_msg = f"Failed to load tenant configuration for org {config_org_id}"
                 logger.error(error_msg)
                 await self.db.schedule_retry(intake_id, attempts, error_msg)
                 return False
@@ -80,7 +80,7 @@ class IntakeProcessor:
                 pulse_config = self.config.get_pulse_api_config()
                 self.pulse_api_client = PulseAPIClient(
                     base_url=pulse_config["base_url"],
-                    org_id=org_id
+                    org_id=config_org_id  # Use the same org ID that was used for tenant config
                 )
             except Exception as e:
                 error_msg = f"Failed to initialize pulse API client: {str(e)}"
