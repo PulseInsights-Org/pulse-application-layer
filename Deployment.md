@@ -62,9 +62,9 @@ nano .env
 Add your environment variables:
 
 ```env
-SUPABASE_URL=https://qiafwyuzcmqoqxhzqcjq.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpYWZ3eXV6Y21xb3F4aHpxY2pxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzgxOTYxNywiZXhwIjoyMDYzMzk1NjE3fQ.XialwEMq5360kdPClHdVWlniXYy94qXxJRg-rtzPhcg
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpYWZ3eXV6Y21xb3F4aHpxY2pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4MTk2MTcsImV4cCI6MjA2MzM5NTYxN30.Htl8pvbB21SLNDIl9W6h7yAbGpZPAu1nRlK5no3uBYY
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_ANON_KEY=
 ```
 
 **Security Note**: Never commit `.env` to version control. Add it to `.gitignore`.

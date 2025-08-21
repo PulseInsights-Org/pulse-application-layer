@@ -9,9 +9,8 @@ from uuid import UUID
 from supabase import Client
 
 from app.core.config import Config
-from app.core.extraction import Extraction
 from app.core.models import MemoryCreate
-from app.service.gemini import GeminiModel
+from app.service.pulse_api import PulseAPIClient
 from app.worker.database import WorkerDatabase
 from app.worker.storage import WorkerStorage
 
@@ -74,46 +73,63 @@ class IntakeProcessor:
             
             logger.info(f"Successfully downloaded {len(content)} characters of content")
             
-            # Step 3: Initialize extraction engine
-            logger.info("Initializing extraction engine")
+            # Step 3: Initialize pulse API client
+            logger.info("Initializing pulse API client")
             try:
-                # Get the API key from tenant secrets
-                api_key = self.config.get_secret("model_api_key")
-                if not api_key:
-                    raise ValueError("Gemini API key not found in tenant configuration")
-                
-                gemini_model = GeminiModel(api_key=api_key)
-                extraction_engine = Extraction(gemini_model)
+                pulse_config = self.config.get_pulse_api_config()
+                self.pulse_api_client = PulseAPIClient(
+                    base_url=pulse_config["base_url"],
+                    org_id=org_id
+                )
             except Exception as e:
-                error_msg = f"Failed to initialize extraction engine: {str(e)}"
+                error_msg = f"Failed to initialize pulse API client: {str(e)}"
                 logger.error(error_msg)
                 await self.db.schedule_retry(intake_id, attempts, error_msg)
                 return False
             
-            # Step 4: Process content with extraction engine
-            logger.info("Processing content with extraction engine")
+            # Step 4: Process content with pulse API
+            logger.info("Processing content with pulse extraction API")
             try:
-                extraction_result = extraction_engine.process_document(content)
+                extraction_result = await self.pulse_api_client.extract_content(content)
+                if extraction_result is None:
+                    raise ValueError("Extraction API returned no result")
             except Exception as e:
-                error_msg = f"Extraction processing failed: {str(e)}"
+                error_msg = f"Extraction API processing failed: {str(e)}"
                 logger.error(error_msg)
                 await self.db.schedule_retry(intake_id, attempts, error_msg)
                 return False
             
             # Step 5: Create memory record
             logger.info("Creating memory record")
+            
+            # Extract information from pulse API response
+            # The pulse API returns a different format, so we need to adapt
+            title = f"Document from {storage_path}"  # Default title
+            summary = f"Processed document with {len(content)} characters"
+            
+            # Try to get more specific info from the API response
+            if extraction_result and isinstance(extraction_result, dict):
+                if extraction_result.get("success"):
+                    # API was successful, use the message as summary
+                    summary = extraction_result.get("message", summary)
+                    # Try to extract filename for title
+                    filename = extraction_result.get("filename", "")
+                    if filename:
+                        title = f"Processed: {filename}"
+            
             memory_data = MemoryCreate(
                 intake_id=UUID(intake_id),
                 org_id=org_id,
-                title=extraction_result.get("title", "Untitled Document"),
-                summary=extraction_result.get("summary", "No summary available"),
+                title=title,
+                summary=summary,
                 metadata={
                     "extraction_result": extraction_result,
                     "processing_stats": {
                         "content_length": len(content),
                         "processing_attempts": attempts + 1,
                         "storage_path": storage_path,
-                        "checksum": checksum
+                        "checksum": checksum,
+                        "pulse_api_used": True
                     }
                 }
             )
@@ -144,6 +160,14 @@ class IntakeProcessor:
             logger.error(error_msg, exc_info=True)
             await self.db.schedule_retry(intake_id, attempts, error_msg)
             return False
+        
+        finally:
+            # Clean up pulse API client
+            if self.pulse_api_client:
+                try:
+                    await self.pulse_api_client.close()
+                except Exception as e:
+                    logger.warning(f"Error closing pulse API client: {e}")
     
     async def get_processing_summary(self, intake_id: str) -> Dict[str, Any]:
         """
