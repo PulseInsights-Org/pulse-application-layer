@@ -45,8 +45,7 @@ class PulseAPIClient:
             Extraction result dictionary if successful, None otherwise
         """
         try:
-            # Prepare the file upload
-            files = {"file": (filename, content, "text/plain")}
+            files = {"file": (filename, content.encode('utf-8'), "text/plain")}
             headers = {"x-org-id": self.org_id}
             
             url = f"{self.base_url}/api/v1/ingestion/"
