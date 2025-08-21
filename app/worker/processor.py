@@ -30,6 +30,7 @@ class IntakeProcessor:
         self.db = WorkerDatabase(supabase_client)
         self.storage = WorkerStorage(supabase_client)
         self.config = Config()
+        self.pulse_api_client = None
     
     async def process_intake(self, intake_data: Dict[str, Any]) -> bool:
         """
@@ -90,12 +91,18 @@ class IntakeProcessor:
             # Step 4: Process content with pulse API
             logger.info("Processing content with pulse extraction API")
             try:
+                if not self.pulse_api_client:
+                    raise ValueError("Pulse API client not initialized")
+                
                 extraction_result = await self.pulse_api_client.extract_content(content)
                 if extraction_result is None:
                     raise ValueError("Extraction API returned no result")
+                
+                logger.info(f"✅ Extraction API call successful for intake {intake_id}")
+                
             except Exception as e:
                 error_msg = f"Extraction API processing failed: {str(e)}"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True)
                 await self.db.schedule_retry(intake_id, attempts, error_msg)
                 return False
             
@@ -163,11 +170,13 @@ class IntakeProcessor:
         
         finally:
             # Clean up pulse API client
-            if self.pulse_api_client:
+            if hasattr(self, 'pulse_api_client') and self.pulse_api_client is not None:
                 try:
                     await self.pulse_api_client.close()
+                    self.pulse_api_client = None  # Reset to None after closing
                 except Exception as e:
                     logger.warning(f"Error closing pulse API client: {e}")
+                    self.pulse_api_client = None  # Reset even on error
     
     async def get_processing_summary(self, intake_id: str) -> Dict[str, Any]:
         """
