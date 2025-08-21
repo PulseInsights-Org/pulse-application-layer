@@ -22,7 +22,7 @@ Internet → Cloudflare → Nginx (Port 80/443) → Gunicorn (127.0.0.1:8000) �
 Connect to your EC2 instance:
 
 ```bash
-ssh -i your-key.pem ubuntu@your-ec2-public-ip
+ssh -i your-key.pem ubuntu@ec2-34-201-101-18.compute-1.amazonaws.com
 ```
 
 Update system and install dependencies:
