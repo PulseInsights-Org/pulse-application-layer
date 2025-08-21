@@ -22,12 +22,22 @@ class Config:
     """Configuration class for the ingestion pipeline."""
     
     def __init__(self):
+        # Supabase configuration
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+        # Org ID for default tenant
+        self.default_org_id = os.getenv("DEFAULT_ORG_ID")
+        
+        # Worker configuration from environment variables
+        self.worker_polling_interval = int(os.getenv("WORKER_POLLING_INTERVAL", "30"))
+        self.worker_max_concurrent_jobs = int(os.getenv("WORKER_MAX_CONCURRENT_JOBS", "3"))
+        self.worker_max_retry_attempts = int(os.getenv("WORKER_MAX_RETRY_ATTEMPTS", "5"))
+        self.worker_base_retry_delay = int(os.getenv("WORKER_BASE_RETRY_DELAY", "60"))
+        self.worker_stats_log_interval = int(os.getenv("WORKER_STATS_LOG_INTERVAL", "300"))
+        
         self.secrets: Dict[str, Any] = {}
         self.tenant_id: Optional[str] = None
-        
-        # Don't load secrets here - they'll be loaded per-request based on org_id
         
     def _get_supabase_client(self) -> Client:
         """Get or create Supabase client."""
@@ -95,18 +105,6 @@ class Config:
                 
         except Exception as e:
             logger.error(f"Error loading tenant secrets for org {org_id}: {e}")
-            # Fallback to environment variables for critical secrets
-            self.secrets = {
-                "model_name": os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash"),
-                "model_api_key": os.getenv("GEMINI_API_KEY"),
-                "pinecone_api_key": os.getenv("PINECONE_API_KEY"),
-                "pinecone_index": os.getenv("PINECONE_INDEX"),
-                "neo4j_uri": os.getenv("NEO4J_URI"),
-                "neo4j_user": os.getenv("NEO4J_USER"),
-                "neo4j_password": os.getenv("NEO4J_PASSWORD"),
-                "neo4j_database": os.getenv("NEO4J_DATABASE"),
-            }
-            logger.warning("Using fallback environment variables for secrets")
             return False
     
     def get_secret(self, key: str, default: Any = None) -> Any:
