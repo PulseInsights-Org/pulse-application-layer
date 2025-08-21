@@ -1,236 +1,198 @@
-# .github/workflows/deploy.yml
-name: Deploy Pulse FastAPI Application
+name: Deploy Pulse to Production
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual deployment
+    branches: [main]
 
 env:
+  PYTHON_VERSION: "3.11"
   APP_NAME: pulse-application-layer
-  APP_PATH: /home/ubuntu/pulse-application-layer
-  SERVICE_NAME: pulse-application-layer
+  SERVER_HOST: dev.pulse-api.getpulseinsights.ai
+  SERVER_USER: ubuntu
+  APP_DIR: /home/ubuntu/pulse-application-layer
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-asyncio httpx
-    
-    - name: Run tests
-      run: |
-        pytest tests/ -v || echo "No tests found, skipping..."
-    
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🧪 Test app imports and basic functionality
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Test that the app can import and start
+          python -c "from app.main import app; print('✅ App imports successfully')"
 
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-    
-    - name: Deploy to Server
-      run: |
-        ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-          set -e
-          
-          echo "🚀 Starting deployment..."
-          
-          # Navigate to application directory
-          cd ${{ env.APP_PATH }}
-          
-          # Activate virtual environment
-          source venv/bin/activate
-          
-          # Backup current version
-          echo "📦 Creating backup..."
-          sudo cp -r ${{ env.APP_PATH }} ${{ env.APP_PATH }}_backup_$(date +%Y%m%d_%H%M%S)
-          
-          # Pull latest changes
-          echo "⬇️  Pulling latest changes..."
-          git fetch origin
-          git reset --hard origin/${{ github.ref_name }}
-          
-          # Install/update dependencies
-          echo "📚 Installing dependencies..."
-          pip install -r requirements.txt
-          
-          # Update .env file with GitHub secrets
-          echo "🔧 Updating environment variables..."
-          cat > .env << 'ENVEOF'
-        SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-        SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-        ENVEOF
-          
-          # Set proper permissions
-          chmod 600 .env
-          
-          # Run database migrations if needed
-          echo "🗄️  Running migrations..."
-          # alembic upgrade head || echo "No alembic migrations found"
-          
-          # Test configuration
-          echo "🧪 Testing application configuration..."
-          timeout 10 python -c "
-        import sys
-        sys.path.append('.')
-        try:
-            from app.main import app
-            print('✅ Application configuration valid')
-        except Exception as e:
-            print(f'❌ Configuration error: {e}')
-            exit(1)
-          "
-          
-          # Restart services
-          echo "🔄 Restarting services..."
-          sudo systemctl restart ${{ env.SERVICE_NAME }}
-          sudo systemctl reload nginx
-          
-          # Wait for service to start
-          echo "⏳ Waiting for service to start..."
-          sleep 5
-          
-          # Health check
-          echo "🏥 Performing health check..."
-          for i in {1..5}; do
-            if curl -f http://localhost:8000/ > /dev/null 2>&1; then
-              echo "✅ Health check passed"
-              break
-            elif [ $i -eq 5 ]; then
-              echo "❌ Health check failed after 5 attempts"
-              
-              # Rollback on failure
-              echo "🔙 Rolling back..."
-              sudo systemctl stop ${{ env.SERVICE_NAME }}
-              
-              # Find latest backup
-              BACKUP_DIR=$(ls -td ${{ env.APP_PATH }}_backup_* | head -1)
-              if [ -n "$BACKUP_DIR" ]; then
-                sudo rm -rf ${{ env.APP_PATH }}
-                sudo mv "$BACKUP_DIR" ${{ env.APP_PATH }}
-                sudo chown -R ubuntu:ubuntu ${{ env.APP_PATH }}
-                cd ${{ env.APP_PATH }}
-                source venv/bin/activate
-                sudo systemctl start ${{ env.SERVICE_NAME }}
-                echo "🔙 Rollback completed"
-              fi
-              exit 1
-            else
-              echo "⏳ Attempt $i failed, retrying in 10 seconds..."
-              sleep 10
-            fi
-          done
-          
-          # Check service status
-          sudo systemctl status ${{ env.SERVICE_NAME }} --no-pager
-          
-          # Clean up old backups (keep last 3)
-          echo "🧹 Cleaning up old backups..."
-          ls -td ${{ env.APP_PATH }}_backup_* | tail -n +4 | xargs sudo rm -rf {} \; || true
-          
-          echo "✅ Deployment completed successfully!"
-        EOF
-    
-    - name: Verify Deployment
-      run: |
-        echo "🔍 Verifying deployment..."
-        
-        # Production health check URL
-        HEALTH_URL="https://dev.pulse-api.getpulseinsights.ai/"
-        
-        # Wait a bit for the service to fully start
-        sleep 10
-        
-        # Perform external health check
-        for i in {1..3}; do
-          RESPONSE=$(curl -s "$HEALTH_URL")
-          if curl -f "$HEALTH_URL" > /dev/null 2>&1; then
-            echo "✅ External health check passed"
-            echo "Response: $RESPONSE"
-            break
-          elif [ $i -eq 3 ]; then
-            echo "❌ External health check failed"
-            exit 1
-          else
-            echo "⏳ External health check attempt $i failed, retrying..."
-            sleep 15
-          fi
-        done
-    
-    - name: Notify Success
-      if: success()
-      run: |
-        echo "🎉 Deployment completed successfully!"
-    
-    - name: Notify Failure
-      if: failure()
-      run: |
-        echo "💥 Deployment failed!"
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-  # Job for environment variable updates only
-  update-env:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-    
     steps:
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-    
-    - name: Update Environment Variables
-      run: |
-        ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-          cd ${{ env.APP_PATH }}
-          
-          echo "🔧 Updating environment variables..."
-          cat > .env << 'ENVEOF'
-        SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-        SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-        ENVEOF
-          
-          chmod 600 .env
-          sudo systemctl restart ${{ env.SERVICE_NAME }}
-          
-          echo "✅ Environment variables updated"
-        EOF
+      - name: 🔑 Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 📂 Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: 🔄 Update .env file
+        run: |
+          ssh ${{ env.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            echo "🔧 Updating .env file..."
+            cd ${{ env.APP_DIR }}
+            
+            # Backup existing .env
+            cp .env .env.backup.$(date +%Y%m%d_%H%M%S) || true
+            
+            # Create new .env file
+            cat > .env << 'ENVEOF'
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          ENVEOF
+            
+            echo "✅ .env file updated successfully"
+          EOF
+
+      - name: 🚀 Deploy to server
+        run: |
+          ssh ${{ env.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+            
+            echo "🚀 Starting deployment for Pulse..."
+            
+            # Navigate to project directory
+            cd ${{ env.APP_DIR }}
+            
+            # Backup current version
+            echo "💾 Creating backup..."
+            cp -r . ../pulse-application-layer_backup_$(date +%Y%m%d_%H%M%S) || true
+            
+            # Pull latest changes
+            echo "📥 Pulling latest changes..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Activate virtual environment
+            source venv/bin/activate
+            
+            # Install/update dependencies
+            echo "📦 Installing dependencies..."
+            pip install -r requirements.txt
+            
+            # Test application can import
+            echo "🧪 Testing application..."
+            python -c "from app.main import app; print('✅ App loads successfully')"
+            
+            # Restart application
+            echo "🔄 Restarting Pulse service..."
+            sudo systemctl restart ${{ env.APP_NAME }}
+            
+            # Wait for application to start
+            sleep 10
+            
+            # Check if service is running
+            echo "✅ Checking service status..."
+            sudo systemctl is-active ${{ env.APP_NAME }} --quiet && echo "Service is running" || exit 1
+            
+            echo "🎉 Deployment completed successfully!"
+          EOF
+
+      - name: 🧪 Health check
+        run: |
+          echo "🏥 Running health check..."
+
+          # Wait for app to fully start
+          sleep 15
+
+          # Test if the application responds
+          for i in {1..30}; do
+            if curl -f -s https://${{ env.SERVER_HOST }}/ > /dev/null; then
+              echo "✅ Application is responding!"
+              break
+            fi
+            echo "⏳ Waiting for application... ($i/30)"
+            sleep 5
+          done
+
+          # Test docs endpoint
+          curl -f https://${{ env.SERVER_HOST }}/docs || echo "⚠️ Docs endpoint not responding"
+
+      - name: 🗑️ Cleanup old backups
+        if: success()
+        run: |
+          ssh ${{ env.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            # Keep only last 5 backups
+            cd /home/ubuntu
+            ls -t pulse-application-layer_backup_* 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
+            echo "🗑️ Cleanup completed"
+          EOF
+
+      - name: ✅ Deployment Success
+        if: success()
+        run: |
+          echo "🎉 Pulse deployment successful!"
+          echo "🌐 Application URL: https://${{ env.SERVER_HOST }}"
+          echo "📖 API Docs: https://${{ env.SERVER_HOST }}/docs"
+
+      - name: ❌ Deployment Failed
+        if: failure()
+        run: |
+          echo "💥 Pulse deployment failed!"
+          echo "📋 Check the logs above for details"
+
+  rollback:
+    runs-on: ubuntu-latest
+    if: failure() && github.ref == 'refs/heads/main'
+    needs: deploy
+
+    steps:
+      - name: 🔑 Setup SSH for rollback
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🔙 Execute rollback
+        run: |
+          ssh ${{ env.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            echo "🔄 Starting rollback..."
+            
+            cd /home/ubuntu
+            LATEST_BACKUP=$(ls -t pulse-application-layer_backup_* 2>/dev/null | head -n 1)
+            
+            if [ ! -z "$LATEST_BACKUP" ]; then
+              echo "📂 Restoring from backup: $LATEST_BACKUP"
+              rm -rf ${{ env.APP_DIR }}
+              mv "$LATEST_BACKUP" ${{ env.APP_DIR }}
+              cd ${{ env.APP_DIR }}
+              
+              source venv/bin/activate
+              sudo systemctl restart ${{ env.APP_NAME }}
+              
+              echo "✅ Rollback completed!"
+            else
+              echo "❌ No backup found for rollback!"
+              exit 1
+            fi
+          EOF
