@@ -86,10 +86,6 @@ jobs:
             # Navigate to project directory
             cd ${{ env.APP_DIR }}
             
-            # Backup current version
-            echo "💾 Creating backup..."
-            cp -r . ../pulse-application-layer_backup_$(date +%Y%m%d_%H%M%S) || true
-            
             # Pull latest changes
             echo "📥 Pulling latest changes..."
             git fetch origin
@@ -139,16 +135,6 @@ jobs:
 
           # Test docs endpoint
           curl -f https://${{ env.SERVER_HOST }}/docs || echo "⚠️ Docs endpoint not responding"
-
-      - name: 🗑️ Cleanup old backups
-        if: success()
-        run: |
-          ssh ${{ env.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            # Keep only last 5 backups
-            cd /home/ubuntu
-            ls -t pulse-application-layer_backup_* 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
-            echo "🗑️ Cleanup completed"
-          EOF
 
       - name: ✅ Deployment Success
         if: success()
