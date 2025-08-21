@@ -11,7 +11,8 @@ Create a `.env` file in the project root:
 ```bash
 SUPABASE_URL=your_supabase_project_url_here
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
-SUPABASE_ANON_KEY=you_supabase_anon_key_here
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+DEFAULT_ORG_ID=your_org_id_here
 ```
 
 ### 2. Install Dependencies
@@ -79,6 +80,30 @@ curl -X POST "http://localhost:8000/api/intakes/{intake_id}/finalize" \
 - `idempotency_key`: Idempotency key
 - `created_at`: Creation timestamp
 - `updated_at`: Last update timestamp
+
+### Memories Table
+- `id`: UUID primary key
+- `intake_id`: Reference to the source intake
+- `org_id`: Organization identifier with foreign key constraint
+- `title`: Extracted title of the memory
+- `summary`: Processed summary content
+- `metadata`: Additional JSONB data for extensibility
+- `created_at`: Creation timestamp
+
+## Background Workers
+
+The application includes a background worker system that automatically processes intakes when they are finalized. Workers operate on a polling mechanism and start automatically with the server.
+
+### How Workers Work
+
+1. **Auto-start**: Workers automatically start when the FastAPI server starts up (might need to change this)
+2. **Polling mechanism**: Workers continuously poll the database for intakes with `ready` status
+3. **Processing pipeline**: When an intake is found, workers:
+   - Download the file from Supabase storage
+   - Extract content using AI-powered extraction
+   - Generate title and summary
+   - Store results in the memories table
+   - Update intake status to `done`
 
 ## Supabase Storage Bucket folder structure
 
