@@ -4,18 +4,7 @@ from typing import Optional
 import uuid
 import os
 import hashlib
-from supabase import create_client, Client
-
-# Supabase client will be initialized lazily
-supabase: Client = None
-
-def get_supabase_client() -> Client:
-    global supabase
-    if supabase is None:
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        supabase = create_client(supabase_url, supabase_key)
-    return supabase
+from ..core.config import config
 
 router = APIRouter()
 
@@ -42,7 +31,7 @@ async def init_intake(
         storage_path = f"org/{x_org_id}/intake/{intake_id}/"
         
         # Insert into database
-        result = get_supabase_client().table("intakes").insert({
+        result = config._get_supabase_client().table("intakes").insert({
             "id": intake_id,
             "org_id": x_org_id,
             "status": "initialized",
@@ -62,7 +51,7 @@ async def init_intake(
         # Handle idempotency - if duplicate, return existing record
         if "duplicate key value" in str(e).lower():
             # Query existing record with same org_id and idempotency_key
-            existing = get_supabase_client().table("intakes").select("id, storage_path").eq("org_id", x_org_id).eq("idempotency_key", idempotency_key).execute()
+            existing = config._get_supabase_client().table("intakes").select("id, storage_path").eq("org_id", x_org_id).eq("idempotency_key", idempotency_key).execute()
             
             if existing.data:
                 record = existing.data[0]
@@ -84,7 +73,7 @@ async def finalize_intake(
     """
     try:
         # Get intake record
-        intake_result = get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
+        intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not intake_result.data:
             raise HTTPException(status_code=404, detail="Intake not found")
@@ -105,7 +94,7 @@ async def finalize_intake(
             # Remove trailing slash for proper path handling
             path_for_listing = storage_path.rstrip('/')
             
-            files_result = get_supabase_client().storage.from_("intakes-raw").list(path_for_listing)
+            files_result = config._get_supabase_client().storage.from_("intakes-raw").list(path_for_listing)
             
             # Check if any files exist in the directory
             if files_result and len(files_result) > 0:
@@ -114,14 +103,14 @@ async def finalize_intake(
                 file_path = f"{path_for_listing}/{file_info['name']}"
                 
                 # Download file content to calculate checksum and size
-                file_content = get_supabase_client().storage.from_("intakes-raw").download(file_path)
+                file_content = config._get_supabase_client().storage.from_("intakes-raw").download(file_path)
                 
                 # Calculate MD5 checksum and size
                 checksum = hashlib.md5(file_content).hexdigest()
                 file_size = len(file_content)
                 
                 # File(s) found - mark as ready with checksum and size
-                get_supabase_client().table("intakes").update({
+                config._get_supabase_client().table("intakes").update({
                     "status": "ready",
                     "next_retry_at": "now()",
                     "checksum": checksum,
@@ -138,7 +127,7 @@ async def finalize_intake(
                 }
             else:
                 # No files found - mark as error-uploading
-                get_supabase_client().table("intakes").update({
+                config._get_supabase_client().table("intakes").update({
                     "status": "error-uploading",
                     "last_error": "No files found in storage path after upload"
                 }).eq("id", intake_id).execute()
@@ -153,7 +142,7 @@ async def finalize_intake(
         except Exception as storage_error:
             # Storage access error - mark as error-uploading
             error_message = f"Storage finalization failed: {str(storage_error)}"
-            get_supabase_client().table("intakes").update({
+            config._get_supabase_client().table("intakes").update({
                 "status": "error-uploading",
                 "last_error": error_message
             }).eq("id", intake_id).execute()
@@ -179,7 +168,7 @@ async def get_intake(
     Get intake status and details.
     """
     try:
-        result = get_supabase_client().table("intakes").select("*").eq("id", intake_id).eq("org_id", x_org_id).execute()
+        result = config._get_supabase_client().table("intakes").select("*").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Intake not found")

@@ -34,13 +34,13 @@ class IntakeProcessor:
     
     async def process_intake(self, intake_data: Dict[str, Any]) -> bool:
         """
-        Process a single intake through the complete pipeline.
-        
-        Args:
-            intake_data: Intake record from database
+            Process a single intake through the complete pipeline.
             
-        Returns:
-            True if processing succeeded, False otherwise
+            Args:
+                intake_data: Intake record from database
+                
+            Returns:
+                True if processing succeeded, False otherwise
         """
         intake_id = intake_data.get("id")
         org_id = intake_data.get("org_id")
@@ -108,7 +108,7 @@ class IntakeProcessor:
                     logger.info(f"🔄 Extraction job started for intake {intake_id}, job_id: {extraction_result.get('job_id')}")
                     
                     # Update intake status to "processing" and return
-                    # The actual processing will happen asynchronously in Pulse Core
+                    # The actual processing will happen asynchronously in Pulse Core and update the status to done onece complete
                     success = await self.db.update_intake_status(intake_id, "processing")
                     if success:
                         logger.info(f"✅ Intake {intake_id} marked as processing - extraction running in background")

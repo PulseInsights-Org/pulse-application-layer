@@ -1,18 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form
-from supabase import create_client, Client
 import os
 from datetime import datetime
-
-# Supabase client will be initialized lazily
-supabase: Client = None
-
-def get_supabase_client() -> Client:
-    global supabase
-    if supabase is None:
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        supabase = create_client(supabase_url, supabase_key)
-    return supabase
+from ..core.config import config
 
 router = APIRouter()
 
@@ -28,7 +17,7 @@ async def upload_file(
     """
     try:
         # Check if intake exists and belongs to the org
-        intake_result = get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
+        intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not intake_result.data:
             raise HTTPException(status_code=404, detail="Intake not found")
@@ -80,7 +69,7 @@ async def upload_file(
         storage_path = f"{intake['storage_path']}{file.filename}"
         
         # Create the file in storage
-        storage_result = get_supabase_client().storage.from_("intakes-raw").upload(
+        storage_result = config._get_supabase_client().storage.from_("intakes-raw").upload(
             path=storage_path,
             file=content,
             file_options={"content-type": "text/plain"}
@@ -90,7 +79,7 @@ async def upload_file(
             raise HTTPException(status_code=500, detail="Failed to upload file to storage")
         
         # Update intake status to indicate file is uploaded
-        get_supabase_client().table("intakes").update({
+        config._get_supabase_client().table("intakes").update({
             "status": "uploading",
             "size_bytes": len(content)
         }).eq("id", intake_id).execute()
@@ -121,7 +110,7 @@ async def upload_pasted_text(
     """
     try:
         # Check if intake exists and belongs to the org
-        intake_result = get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
+        intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not intake_result.data:
             raise HTTPException(status_code=404, detail="Intake not found")
@@ -160,7 +149,7 @@ async def upload_pasted_text(
         storage_path = f"{intake['storage_path']}{original_filename}"
         
         # Create the file in storage
-        storage_result = get_supabase_client().storage.from_("intakes-raw").upload(
+        storage_result = config._get_supabase_client().storage.from_("intakes-raw").upload(
             path=storage_path,
             file=content,
             file_options={"content-type": "text/plain"}
@@ -170,7 +159,7 @@ async def upload_pasted_text(
             raise HTTPException(status_code=500, detail="Failed to upload text to storage")
         
         # Update intake status to indicate content is uploaded
-        get_supabase_client().table("intakes").update({
+        config._get_supabase_client().table("intakes").update({
             "status": "uploading",
             "size_bytes": len(content)
         }).eq("id", intake_id).execute()
