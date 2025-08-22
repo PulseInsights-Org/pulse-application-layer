@@ -33,13 +33,14 @@ class PulseAPIClient:
         
         logger.info(f"✅ Pulse API client initialized for org {org_id} at {base_url}")
     
-    async def extract_content(self, content: str, filename: str = "document.txt") -> Optional[Dict[str, Any]]:
+    async def extract_content(self, content: str, filename: str = "document.txt", intake_id: str = None) -> Optional[Dict[str, Any]]:
         """
         Send content to the pulse extraction API for processing.
         
         Args:
             content: Text content to extract
             filename: Filename for the content (used by the API)
+            intake_id: The intake ID to track this extraction job
             
         Returns:
             Extraction result dictionary if successful, None otherwise
@@ -48,10 +49,16 @@ class PulseAPIClient:
             files = {"file": (filename, content.encode('utf-8'), "text/plain")}
             headers = {"x-org-id": self.org_id}
             
+            # Add intake ID header if provided
+            if intake_id:
+                headers["x-intake-id"] = intake_id
+            
             url = f"{self.base_url}/api/v1/ingestion/"
             
             logger.info(f"🔄 Sending content to pulse API: {url}")
             logger.info(f"Content length: {len(content)} characters")
+            if intake_id:
+                logger.info(f"📋 Intake ID: {intake_id}")
             
             # Make the API call
             response = await self.client.post(url, files=files, headers=headers)

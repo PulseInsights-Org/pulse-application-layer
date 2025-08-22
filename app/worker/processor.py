@@ -94,10 +94,33 @@ class IntakeProcessor:
                 if not self.pulse_api_client:
                     raise ValueError("Pulse API client not initialized")
                 
-                extraction_result = await self.pulse_api_client.extract_content(content)
+                extraction_result = await self.pulse_api_client.extract_content(content, intake_id=intake_id)
                 if extraction_result is None:
                     raise ValueError("Extraction API returned no result")
                 
+                # Debug: Log what we actually received
+                logger.info(f"🔍 Received extraction result: {extraction_result}")
+                logger.info(f"🔍 Result type: {type(extraction_result)}")
+                logger.info(f"🔍 Status field: {extraction_result.get('status')}")
+                
+                # Check if this is an ACK response (new async pattern)
+                if extraction_result.get("status") == "processing":
+                    logger.info(f"🔄 Extraction job started for intake {intake_id}, job_id: {extraction_result.get('job_id')}")
+                    
+                    # Update intake status to "processing" and return
+                    # The actual processing will happen asynchronously in Pulse Core
+                    success = await self.db.update_intake_status(intake_id, "processing")
+                    if success:
+                        logger.info(f"✅ Intake {intake_id} marked as processing - extraction running in background")
+                        return True
+                    else:
+                        error_msg = "Failed to update intake status to processing"
+                        logger.error(error_msg)
+                        await self.db.schedule_retry(intake_id, attempts, error_msg)
+                        return False
+                
+                # If we get here, it's the old synchronous response (fallback)
+                # For async responses (status: "processing"), we already returned above
                 logger.info(f"✅ Extraction API call successful for intake {intake_id}")
                 
             except Exception as e:
@@ -106,11 +129,10 @@ class IntakeProcessor:
                 await self.db.schedule_retry(intake_id, attempts, error_msg)
                 return False
             
-            # Step 5: Create memory record
+            # Step 5: Create memory record (only for synchronous responses)
             logger.info("Creating memory record")
             
             # Extract information from pulse API response
-            # The pulse API returns a different format, so we need to adapt
             title = f"Document from {storage_path}"  # Default title
             summary = f"Processed document with {len(content)} characters"
             
