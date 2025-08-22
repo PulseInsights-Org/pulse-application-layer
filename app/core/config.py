@@ -37,7 +37,7 @@ class Config:
         self.worker_stats_log_interval = int(os.getenv("WORKER_STATS_LOG_INTERVAL", "300"))
         
         # Pulse API configuration
-        self.pulse_api_base_url = os.getenv("PULSE_API_BASE_URL", "http://localhost:8000")
+        self.pulse_api_base_url = os.getenv("PULSE_API_BASE_URL", "https://dev.pulse-core.getpulseinsights.ai")
         
         self.secrets: Dict[str, Any] = {}
         self.tenant_id: Optional[str] = None
