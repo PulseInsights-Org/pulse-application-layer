@@ -75,32 +75,19 @@ curl -X POST "http://localhost:8001/api/intakes/{intake_id}/finalize" \
 
 ## Scooby AI Integration
 
-The API now includes endpoints for querying the Scooby AI bot with streaming support.
+The API now includes an endpoint for querying the Scooby AI bot with streaming support.
 
-### Query Scooby (Flexible Streaming)
+### Query Scooby
 ```bash
 # Streaming (default) - no need to specify stream parameter
 curl -X POST "http://localhost:8001/api/scooby/query" \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is AI?"}'
+  -d '{"question": "What was discussed about techpacks?"}'
 
 # Non-streaming - explicitly disable streaming
 curl -X POST "http://localhost:8001/api/scooby/query" \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is AI?", "stream": false}'
-
-# Dedicated streaming endpoint (always streams)
-curl -X POST "http://localhost:8001/api/scooby/stream" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is AI?"}'
-```
-
-### Dedicated Streaming Endpoint
-```bash
-# Always streams responses
-curl -X POST "http://localhost:8001/api/scooby/stream" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Explain the meeting outcomes in detail"}'
+  -d '{"question": "What was discussed about techpacks?", "stream": false}'
 ```
 
 ### Streaming Response Format

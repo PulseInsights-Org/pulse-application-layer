@@ -126,52 +126,6 @@ async def scooby_query(request: QueryRequest):
         logging.error(f"Traceback: {traceback.format_exc()}")
         return {"error": f"Internal error: {str(e)}", "error_type": str(type(e))}
 
-@app.post("/api/scooby/stream")
-async def scooby_stream_query(request: QueryRequest):
-    """
-    Dedicated streaming endpoint for Scooby queries.
-    
-    This endpoint always streams responses from Scooby,
-    providing real-time AI responses to clients.
-    """
-    from fastapi.responses import StreamingResponse
-    from typing import AsyncGenerator
-    
-    async def stream_from_scooby() -> AsyncGenerator[str, None]:
-        """Stream response from Scooby to client in real-time."""
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
-                # Start streaming request to Scooby
-                async with client.stream(
-                    "POST",
-                    f"{SCOOBY_URL}/query",
-                    json={
-                        "question": request.question,
-                        "stream": True
-                    },
-                    headers={"Content-Type": "application/json"}
-                ) as scooby_response:
-                    
-                    if scooby_response.status_code != 200:
-                        yield f"data: [ERROR] Scooby API error: {scooby_response.status_code}\n\n"
-                        return
-                    
-                    # Stream chunks from Scooby immediately as they arrive
-                    async for chunk in scooby_response.aiter_text():
-                        if chunk:
-                            # Forward each chunk immediately to the client
-                            yield chunk
-                            
-        except Exception as e:
-            logging.error(f"Error in streaming from Scooby: {e}")
-            yield f"data: [ERROR] Streaming error: {str(e)}\n\n"
-    
-    return StreamingResponse(
-        stream_from_scooby(),
-        media_type="text/event-stream"
-    )
-
-
 if __name__ == "__main__":
     def signal_handler(signum, frame):
         """Handle shutdown signals."""
