@@ -14,6 +14,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
 DEFAULT_ORG_ID=your_org_id_here
 PULSE_API_BASE_URL=http://localhost:8001
+SCOOBY_URL=http://localhost:8000
 ```
 
 ### 2. Install Dependencies
@@ -45,6 +46,7 @@ curl -X POST "http://localhost:8001/api/intakes/init" \
 **Note**: 
 - Ideally `x-idempotency-key` will be generated on the client side. For the sake for testing the API we are hardcoding this.
 - assuming x-org-id as `pulse-dev` change if required
+
 ### Upload File (supports .txt and .md files)
 ```bash
 curl -X POST "http://localhost:8001/api/upload/file/{intake_id}" \
@@ -70,6 +72,42 @@ curl -X GET "http://localhost:8001/api/intakes/{intake_id}" \
 curl -X POST "http://localhost:8001/api/intakes/{intake_id}/finalize" \
   -H "x-org-id: pulse-dev"
 ```
+
+## Scooby AI Integration
+
+The API now includes endpoints for querying the Scooby AI bot with streaming support.
+
+### Query Scooby (Flexible Streaming)
+```bash
+# Streaming (default) - no need to specify stream parameter
+curl -X POST "http://localhost:8001/api/scooby/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is AI?"}'
+
+# Non-streaming - explicitly disable streaming
+curl -X POST "http://localhost:8001/api/scooby/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is AI?", "stream": false}'
+
+# Dedicated streaming endpoint (always streams)
+curl -X POST "http://localhost:8001/api/scooby/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is AI?"}'
+```
+
+### Dedicated Streaming Endpoint
+```bash
+# Always streams responses
+curl -X POST "http://localhost:8001/api/scooby/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Explain the meeting outcomes in detail"}'
+```
+
+### Streaming Response Format
+When streaming is enabled, responses use Server-Sent Events (SSE) format:
+- Each chunk is sent as `data: {chunk}\n\n`
+- Completion is signaled with `data: [DONE]\n\n`
+- Errors are handled with `data: [ERROR] {message}\n\n`
 
 ## Database Schema
 

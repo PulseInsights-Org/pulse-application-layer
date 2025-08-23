@@ -39,6 +39,7 @@ app.include_router(worker_router, prefix="/api", tags=["worker"])
 
 class QueryRequest(BaseModel):
     question: str
+    stream: bool = True
 
 @app.get("/")
 async def root():
@@ -47,45 +48,128 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "Intake to Ingest MVP",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
-@app.post("/retrieve")
-async def retrieve_endpoint(request: QueryRequest):
-    """Retrieve information by sending query to Scooby via HTTP."""
+@app.post("/api/scooby/query")
+async def scooby_query(request: QueryRequest):
+    """
+    Query Scooby bot with optional streaming support.
+    
+    This endpoint acts as a proxy to Scooby's query endpoint,
+    allowing the pulse-application-layer to stream responses
+    from Scooby to its clients.
+    """
     try:
-        # Call Scooby's /query endpoint via HTTP
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{SCOOBY_URL}/query",
-                json={"question": request.question},
-                timeout=30.0
+        if request.stream:
+            # For streaming, we'll return a streaming response
+            from fastapi.responses import StreamingResponse
+            from typing import AsyncGenerator
+            
+            async def stream_from_scooby() -> AsyncGenerator[str, None]:
+                """Stream response from Scooby to client in real-time."""
+                try:
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+                        # Start streaming request to Scooby
+                        async with client.stream(
+                            "POST",
+                            f"{SCOOBY_URL}/query",
+                            json={
+                                "question": request.question,
+                                "stream": True
+                            },
+                            headers={"Content-Type": "application/json"}
+                        ) as scooby_response:
+                            
+                            if scooby_response.status_code != 200:
+                                yield f"data: [ERROR] Scooby API error: {scooby_response.status_code}\n\n"
+                                return
+                            
+                            # Stream chunks from Scooby immediately as they arrive
+                            async for chunk in scooby_response.aiter_text():
+                                if chunk:
+                                    # Forward each chunk immediately to the client
+                                    yield chunk
+                                    
+                except Exception as e:
+                    logging.error(f"Error in streaming from Scooby: {e}")
+                    yield f"data: [ERROR] Streaming error: {str(e)}\n\n"
+            
+            return StreamingResponse(
+                stream_from_scooby(),
+                media_type="text/event-stream"
             )
-            response.raise_for_status()
-            scooby_response = response.json()
-            
-            return {
-                "success": True,
-                "question": request.question,
-                "answer": scooby_response.get("response", "No response from Scooby"),
-                "source": "Scooby (HTTP + Gemini WebSocket)"
-            }
-            
-    except httpx.RequestError as e:
-        logging.error(f"Error calling Scooby at {SCOOBY_URL}: {e}")
-        return {
-            "success": False,
-            "error": f"Failed to connect to Scooby at {SCOOBY_URL}: {str(e)}"
-        }
+        else:
+            # For non-streaming, return complete response
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+                scooby_response = await client.post(
+                    f"{SCOOBY_URL}/query",
+                    json={
+                        "question": request.question,
+                        "stream": False
+                    },
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if scooby_response.status_code == 200:
+                    return scooby_response.json()
+                else:
+                    return {
+                        "error": f"Scooby API error: {scooby_response.status_code}",
+                        "details": scooby_response.text
+                    }
+                    
     except Exception as e:
-        logging.error(f"Error in retrieve endpoint: {e}")
-        return {
-            "success": False,
-            "error": f"Internal error: {str(e)}"
-        }
+        logging.error(f"Error calling Scooby API: {e}")
+        logging.error(f"Error type: {type(e)}")
+        logging.error(f"Error details: {repr(e)}")
+        import traceback
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        return {"error": f"Internal error: {str(e)}", "error_type": str(type(e))}
+
+@app.post("/api/scooby/stream")
+async def scooby_stream_query(request: QueryRequest):
+    """
+    Dedicated streaming endpoint for Scooby queries.
+    
+    This endpoint always streams responses from Scooby,
+    providing real-time AI responses to clients.
+    """
+    from fastapi.responses import StreamingResponse
+    from typing import AsyncGenerator
+    
+    async def stream_from_scooby() -> AsyncGenerator[str, None]:
+        """Stream response from Scooby to client in real-time."""
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+                # Start streaming request to Scooby
+                async with client.stream(
+                    "POST",
+                    f"{SCOOBY_URL}/query",
+                    json={
+                        "question": request.question,
+                        "stream": True
+                    },
+                    headers={"Content-Type": "application/json"}
+                ) as scooby_response:
+                    
+                    if scooby_response.status_code != 200:
+                        yield f"data: [ERROR] Scooby API error: {scooby_response.status_code}\n\n"
+                        return
+                    
+                    # Stream chunks from Scooby immediately as they arrive
+                    async for chunk in scooby_response.aiter_text():
+                        if chunk:
+                            # Forward each chunk immediately to the client
+                            yield chunk
+                            
+        except Exception as e:
+            logging.error(f"Error in streaming from Scooby: {e}")
+            yield f"data: [ERROR] Streaming error: {str(e)}\n\n"
+    
+    return StreamingResponse(
+        stream_from_scooby(),
+        media_type="text/event-stream"
+    )
 
 
 if __name__ == "__main__":
