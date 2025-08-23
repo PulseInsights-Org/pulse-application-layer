@@ -73,28 +73,21 @@ curl -X POST "http://localhost:8001/api/intakes/{intake_id}/finalize" \
   -H "x-org-id: pulse-dev"
 ```
 
-## Scooby AI Integration
+## Pulse AI Integration
 
-The API now includes an endpoint for querying the Scooby AI bot with streaming support.
+The API now includes an endpoint for querying the Pulse AI bot which conencts Gemini Live. (for now only non-streaming)
 
 ### Query Scooby
 ```bash
-# Streaming (default) - no need to specify stream parameter
 curl -X POST "http://localhost:8001/api/scooby/query" \
   -H "Content-Type: application/json" \
   -d '{"question": "What was discussed about techpacks?"}'
-
-# Non-streaming - explicitly disable streaming
-curl -X POST "http://localhost:8001/api/scooby/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What was discussed about techpacks?", "stream": false}'
 ```
 
-### Streaming Response Format
-When streaming is enabled, responses use Server-Sent Events (SSE) format:
-- Each chunk is sent as `data: {chunk}\n\n`
-- Completion is signaled with `data: [DONE]\n\n`
-- Errors are handled with `data: [ERROR] {message}\n\n`
+### Response Format
+- response - Response from the model 
+- status - Status of request
+- question - question to which response was generated
 
 ## Database Schema
 
