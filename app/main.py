@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi import Request
 from app.api.intakes import router as intakes_router
 from app.api.uploads import router as uploads_router
 from app.api.worker import router as worker_router
@@ -8,28 +9,26 @@ from datetime import datetime, timezone
 import logging
 import signal
 import sys
+from pydantic import BaseModel
+from app.worker import manager as worker_manager
+from app.service.pulse import PulseLive
+from app.core.tools import GeminiTools
 
-# Load environment variables from .env file
+
 load_dotenv()
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Import worker manager to auto-start worker
-from app.worker import manager as worker_manager
-
 app = FastAPI(title="Intake to Ingest MVP")
-
-# Add middleware for tenant resolution
 app.middleware("http")(tenant_middleware)
-
-# Include routers
 app.include_router(intakes_router, prefix="/api", tags=["intakes"])
 app.include_router(uploads_router, prefix="/api", tags=["uploads"])
 app.include_router(worker_router, prefix="/api", tags=["worker"])
+
+class QueryRequest(BaseModel):
+    question: str
 
 @app.get("/")
 async def root():
@@ -38,14 +37,36 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "Intake to Ingest MVP",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
-
-
+@app.post("/api/query")
+async def scooby_query(internal: Request, request: QueryRequest):
+    """
+    Query PulseLive (Gemini) with streaming support.
+    
+    This endpoint uses the PulseLive class to get responses from Gemini
+    with tool integration for Pinecone and Neo4j queries.
+    """
+    try:
+        tools = GeminiTools(internal.state.secrets)
+        model = PulseLive(tools=tools)
+        response = await model.connect_to_gemini(request.question)
+        
+        return {
+            "response": response,
+            "status": "success",
+            "question": request.question
+        }
+        
+    except Exception as e:
+        logging.error(f"Error in Gemini query: {e}")
+        return {
+            "error": f"Failed to process query: {str(e)}",
+            "status": "error",
+            "question": request.question
+        }
+    
+    
 if __name__ == "__main__":
     def signal_handler(signum, frame):
         """Handle shutdown signals."""

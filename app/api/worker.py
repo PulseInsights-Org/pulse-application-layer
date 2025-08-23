@@ -1,12 +1,6 @@
-"""
-Worker management API endpoints.
-"""
-
 from fastapi import APIRouter, HTTPException, Header
 from datetime import datetime, timezone
 import logging
-
-# Import the global worker instance
 from app.worker.manager import get_worker_instance
 
 router = APIRouter()

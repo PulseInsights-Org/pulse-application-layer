@@ -21,7 +21,7 @@ async def tenant_middleware(request: Request, call_next):
     """
     
     # Define protected routes that need tenant resolution
-    protected_prefixes = ["/api/ingestion", "/api/intakes"]
+    protected_prefixes = ["/api/ingestion", "/api/intakes", "/api/query"]
     
     # Check if this is a protected route
     is_protected = any(request.url.path.startswith(prefix) for prefix in protected_prefixes)

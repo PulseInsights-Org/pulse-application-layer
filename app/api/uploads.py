@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form
-import os
 from datetime import datetime
 from ..core.config import config
 

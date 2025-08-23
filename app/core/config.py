@@ -1,9 +1,3 @@
-"""
-Configuration management for the ingestion pipeline.
-Loads tenant-specific secrets from Supabase tenant_secrets table.
-Based on pulse implementation.
-"""
-
 import os
 import time
 from typing import Dict, Any, Optional
@@ -14,7 +8,6 @@ import logging
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# Cache for tenant secrets
 _secrets_cache = {}  # {tenant_id: (secrets, expiry)}
 SECRETS_CACHE_TTL = 12 * 3600  # 12 hours
 
@@ -114,15 +107,10 @@ class Config:
         """Get a secret value by key."""
         return self.secrets.get(key, default)
     
-
-    
     def get_pulse_api_config(self) -> Dict[str, str]:
         """Get Pulse API configuration."""
         return {
             "base_url": self.pulse_api_base_url
         }
     
-
-
-# Global config instance
 config = Config()
