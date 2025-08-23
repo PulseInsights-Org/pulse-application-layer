@@ -108,6 +108,23 @@ curl -X POST "http://localhost:8001/api/query" \
   -d '{"question": "What was discussed about techpacks"}'
 ```
 
+### Get Memories
+```bash
+# Get memories for an organization with pagination (default: page 1, page_size 15)
+curl -X GET "http://localhost:8001/api/memories" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
+
+# Get specific page with custom page size
+curl -X GET "http://localhost:8001/api/memories?page=1&page_size=2" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
+```
+**Note**: 
+- Returns memories with title, summary, and created_at
+- Default page size is 15 records per page
+- Maximum page size is 100 records
+- Results are ordered by created_at (newest first)
+- Increment page value to get next set of records (if they exist)
+
 ## Database Schema
 
 ### Intakes Table

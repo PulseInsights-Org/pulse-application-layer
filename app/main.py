@@ -1,9 +1,10 @@
 from fastapi import FastAPI
-from fastapi import Request
+from fastapi import Request, HTTPException, Header, Query
 from app.api.intakes import router as intakes_router
 from app.api.uploads import router as uploads_router
 from app.api.worker import router as worker_router
 from app.core.middleware import tenant_middleware
+from app.core.config import config
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 import logging
@@ -65,6 +66,63 @@ async def scooby_query(internal: Request, request: QueryRequest):
             "status": "error",
             "question": request.question
         }
+
+@app.get("/api/memories")
+async def get_memories(
+    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(15, ge=1, le=100, description="Number of records per page")
+):
+    """Get memories for a specific organization with pagination."""
+    try:
+        # Calculate offset for pagination
+        offset = (page - 1) * page_size
+        
+        # Get database client directly from config
+        supabase_client = config._get_supabase_client()
+        
+        # Query memories table for the specific org_id using limit and offset
+        result = supabase_client.table("memories").select(
+            "title, summary, created_at"
+        ).eq(
+            "org_id", x_org_id
+        ).order(
+            "created_at", desc=True
+        ).limit(page_size).offset(offset).execute()
+        
+        memories = result.data or []
+        
+        # Get total count for pagination info
+        count_result = supabase_client.table("memories").select(
+            "id", count="exact"
+        ).eq("org_id", x_org_id).execute()
+        
+        total_count = count_result.count or 0
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        # Add some debug logging
+        logging.info(f"Query: page={page}, page_size={page_size}, offset={offset}")
+        logging.info(f"Result: {len(memories)} memories returned")
+        logging.info(f"Total count: {total_count}")
+        
+        return {
+            "memories": memories,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1
+            }
+        }
+        
+    except Exception as e:
+        logging.error(f"Error fetching memories for org {x_org_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch memories: {str(e)}"
+        )
     
     
 if __name__ == "__main__":
