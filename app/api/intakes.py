@@ -1,8 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
-from typing import Optional
 import uuid
-import os
 import hashlib
 from ..core.config import config
 
@@ -24,13 +22,10 @@ async def init_intake(
     try:
         idempotency_key = x_idempotency_key
         
-        # Generate intake_id
         intake_id = str(uuid.uuid4())
         
-        # Generate storage path according to doc pattern
         storage_path = f"org/{x_org_id}/intake/{intake_id}/"
         
-        # Insert into database
         result = config._get_supabase_client().table("intakes").insert({
             "id": intake_id,
             "org_id": x_org_id,
@@ -48,9 +43,7 @@ async def init_intake(
         )
         
     except Exception as e:
-        # Handle idempotency - if duplicate, return existing record
         if "duplicate key value" in str(e).lower():
-            # Query existing record with same org_id and idempotency_key
             existing = config._get_supabase_client().table("intakes").select("id, storage_path").eq("org_id", x_org_id).eq("idempotency_key", idempotency_key).execute()
             
             if existing.data:
@@ -72,7 +65,6 @@ async def finalize_intake(
     Changes status from 'uploading' to 'ready' if file exists and validation passes, or to 'error' if not.
     """
     try:
-        # Get intake record
         intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not intake_result.data:
@@ -80,7 +72,6 @@ async def finalize_intake(
         
         intake = intake_result.data[0]
         
-        # Check if intake is in valid state for finalization
         valid_statuses = ["uploading", "error-uploading"]
         if intake["status"] not in valid_statuses:
             raise HTTPException(
@@ -88,28 +79,22 @@ async def finalize_intake(
                 detail=f"Cannot finalize intake with status: {intake['status']}. Expected one of: {', '.join(valid_statuses)}."
             )
         
-        # List files in the intake's storage path to check if any files exist
         try:
             storage_path = intake["storage_path"]
-            # Remove trailing slash for proper path handling
             path_for_listing = storage_path.rstrip('/')
             
             files_result = config._get_supabase_client().storage.from_("intakes-raw").list(path_for_listing)
             
-            # Check if any files exist in the directory
             if files_result and len(files_result) > 0:
-                # Calculate checksum and size for the first file
                 file_info = files_result[0]
                 file_path = f"{path_for_listing}/{file_info['name']}"
                 
-                # Download file content to calculate checksum and size
                 file_content = config._get_supabase_client().storage.from_("intakes-raw").download(file_path)
                 
                 # Calculate MD5 checksum and size
                 checksum = hashlib.md5(file_content).hexdigest()
                 file_size = len(file_content)
                 
-                # File(s) found - mark as ready with checksum and size
                 config._get_supabase_client().table("intakes").update({
                     "status": "ready",
                     "next_retry_at": "now()",
@@ -126,7 +111,6 @@ async def finalize_intake(
                     "file_size": file_size
                 }
             else:
-                # No files found - mark as error-uploading
                 config._get_supabase_client().table("intakes").update({
                     "status": "error-uploading",
                     "last_error": "No files found in storage path after upload"
@@ -140,7 +124,6 @@ async def finalize_intake(
                 }
                 
         except Exception as storage_error:
-            # Storage access error - mark as error-uploading
             error_message = f"Storage finalization failed: {str(storage_error)}"
             config._get_supabase_client().table("intakes").update({
                 "status": "error-uploading",
