@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
-from datetime import datetime, timezone
 import logging
+from ..core.config import config
 from app.worker.manager import get_worker_instance
 
 router = APIRouter()
@@ -29,11 +29,28 @@ async def worker_status():
 @router.post("/worker/process/{intake_id}")
 async def process_intake_manually(
     intake_id: str,
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization ID")
 ):
     """Manually trigger processing of a specific intake."""
     try:
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"]
+        
+         
         worker = get_worker_instance()
+        
         if not worker:
             raise HTTPException(
                 status_code=503,

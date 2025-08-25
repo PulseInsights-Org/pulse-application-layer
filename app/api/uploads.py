@@ -8,13 +8,28 @@ router = APIRouter()
 async def upload_file(
     intake_id: str,
     file: UploadFile = File(...),
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization ID")
 ):
     """
     Upload a text file (.txt or .md) for an existing intake.
     Stores the file content in Supabase Storage.
     """
     try:
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"]
+        print(intake_id)
         # Check if intake exists and belongs to the org
         intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
@@ -101,13 +116,27 @@ async def upload_file(
 async def upload_pasted_text(
     intake_id: str,
     text_content: str = Form(..., description="Raw text content to upload"),
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization ID")
 ):
     """
     Upload pasted text content for an existing intake.
     Stores the text content in Supabase Storage as a .txt file.
     """
     try:
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"]
         # Check if intake exists and belongs to the org
         intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         

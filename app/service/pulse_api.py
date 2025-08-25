@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class PulseAPIClient:
     """Client for calling the pulse project's extraction API."""
     
-    def __init__(self, base_url: str, org_id: str):
+    def __init__(self, base_url: str, org_name: str):
         """
         Initialize the pulse API client.
         
@@ -22,7 +22,15 @@ class PulseAPIClient:
             org_id: Organization ID for tenant isolation
         """
         self.base_url = base_url.rstrip('/')
-        self.org_id = org_id
+        
+        self.org_id = (
+            Config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", org_name) 
+            .execute()
+        ) 
+        
         self.config = Config()
         
         # Create HTTP client with timeout
@@ -31,7 +39,7 @@ class PulseAPIClient:
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
         )
         
-        logger.info(f"✅ Pulse API client initialized for org {org_id} at {base_url}")
+        logger.info(f"✅ Pulse API client initialized for org {org_name} at {base_url}")
     
     async def extract_content(self, content: str, filename: str = "document.txt", intake_id: str = None) -> Optional[Dict[str, Any]]:
         """
@@ -47,7 +55,7 @@ class PulseAPIClient:
         """
         try:
             files = {"file": (filename, content.encode('utf-8'), "text/plain")}
-            headers = {"x-org-id": self.org_id}
+            headers = {"x-org-name": self.org_id}
             
             # Add intake ID header if provided
             if intake_id:

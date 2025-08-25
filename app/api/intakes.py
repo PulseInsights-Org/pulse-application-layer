@@ -6,13 +6,13 @@ from ..core.config import config
 
 router = APIRouter()
 
-class InitIntakeResponse(BaseModel):
+class   InitIntakeResponse(BaseModel):
     intake_id: str
     storage_path: str
 
 @router.post("/intakes/init", response_model=InitIntakeResponse)
 async def init_intake(
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID"),
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization ID"),
     x_idempotency_key: str = Header(..., alias="x-idempotency-key", description="Idempotency Key")
 ):
     """
@@ -21,8 +21,21 @@ async def init_intake(
     """
     try:
         idempotency_key = x_idempotency_key
-        
         intake_id = str(uuid.uuid4())
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"] 
         
         storage_path = f"org/{x_org_id}/intake/{intake_id}/"
         
@@ -58,13 +71,28 @@ async def init_intake(
 @router.post("/intakes/{intake_id}/finalize")
 async def finalize_intake(
     intake_id: str,
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization ID")
 ):
     """
     Finalize intake by verifying file exists, calculating checksum and size.
     Changes status from 'uploading' to 'ready' if file exists and validation passes, or to 'error' if not.
     """
     try:
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"] 
+        
         intake_result = config._get_supabase_client().table("intakes").select("storage_path, status").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not intake_result.data:
@@ -145,12 +173,27 @@ async def finalize_intake(
 @router.get("/intakes/{intake_id}")
 async def get_intake(
     intake_id: str,
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID")
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization ID")
 ):
     """
     Get intake status and details.
     """
     try:
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"] 
+        
         result = config._get_supabase_client().table("intakes").select("*").eq("id", intake_id).eq("org_id", x_org_id).execute()
         
         if not result.data:

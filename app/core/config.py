@@ -8,7 +8,7 @@ import logging
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-_secrets_cache = {}  # {tenant_id: (secrets, expiry)}
+_secrets_cache = {}  # {id: (secrets, expiry)}
 SECRETS_CACHE_TTL = 12 * 3600  # 12 hours
 
 class Config:
@@ -39,7 +39,7 @@ class Config:
         """Get or create Supabase client."""
         return create_client(self.supabase_url, self.supabase_key)
     
-    def _resolve_tenant_from_org(self, org_id: str) -> str:
+    def _resolve_tenant_from_org(self, org_name: str) -> str:
         """
         Resolve tenant_id from org_id using org_directory table.
         
@@ -51,19 +51,28 @@ class Config:
         """
         try:
             client = self._get_supabase_client()
-            resp = client.table("org_directory").select("tenant_id,status").eq("org_id", org_id).single().execute()
+
+            resp = (
+                client.table("orgs")
+                .select("id, status")
+                .eq("org_name", org_name)
+                .single()  
+                .execute()
+            )
+            
+            print(resp)
             
             row = resp.data
             if not row or row.get("status") != "active":
-                raise ValueError(f"Org {org_id} not found or inactive")
-            
-            return row["tenant_id"]
+                raise ValueError(f"Org {org_name} not found or inactive")
+
+            return row["id"]
             
         except Exception as e:
-            logger.error(f"Failed to resolve tenant for org {org_id}: {e}")
+            logger.error(f"Failed to resolve tenant for org {org_name}: {e}")
             raise ValueError(f"Tenant resolution failed: {e}")
     
-    def load_tenant_secrets(self, org_id: str) -> bool:
+    def load_tenant_secrets(self, org_name: str) -> bool:
         """
         Load tenant-specific secrets for the given org_id.
         
@@ -75,32 +84,33 @@ class Config:
         """
         try:
             # Resolve tenant_id from org_id
-            tenant_id = self._resolve_tenant_from_org(org_id)
-            self.tenant_id = tenant_id
+            id = self._resolve_tenant_from_org(org_name)
+            self.org_id = id
+            print(id)
             
             # Check cache first
-            cached = _secrets_cache.get(tenant_id)
+            cached = _secrets_cache.get(id)
             if cached and cached[1] > time.time():
                 self.secrets = cached[0]
-                logger.info(f"✅ Loaded {len(self.secrets)} secrets from cache for tenant {tenant_id}")
+                logger.info(f"✅ Loaded {len(self.secrets)} secrets from cache for tenant {id}")
                 return True
             
             # Load from database
             client = self._get_supabase_client()
-            result = client.table("tenant_secrets").select("*").eq("tenant_id", tenant_id).single().execute()
+            result = client.table("tenant_secrets").select("*").eq("org_id", id).single().execute()
             
             if result.data:
                 self.secrets = result.data
                 # Cache the result
-                _secrets_cache[tenant_id] = (self.secrets, time.time() + SECRETS_CACHE_TTL)
-                logger.info(f"✅ Loaded {len(self.secrets)} secrets from database for tenant {tenant_id}")
+                _secrets_cache[id] = (self.secrets, time.time() + SECRETS_CACHE_TTL)
+                logger.info(f"✅ Loaded {len(self.secrets)} secrets from database for tenant {id}")
                 return True
             else:
-                logger.error(f"No secrets found for tenant {tenant_id}")
+                logger.error(f"No secrets found for tenant {id}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Error loading tenant secrets for org {org_id}: {e}")
+            logger.error(f"Error loading tenant secrets for org {org_name}: {e}")
             return False
     
     def get_secret(self, key: str, default: Any = None) -> Any:

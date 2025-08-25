@@ -40,7 +40,7 @@ The API will be available at `http://localhost:8001`
 ### Initialize Intake
 ```bash
 curl -X POST "http://localhost:8001/api/intakes/init" \
-  -H "x-org-id: pulse-dev" \
+  -H "x-org-name: pulse-dev" \
   -H "x-idempotency-key: 550e8400-e29b-41d4-a716-446655440001"
 ```
 **Note**: 
