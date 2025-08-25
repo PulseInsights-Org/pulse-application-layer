@@ -95,7 +95,7 @@ class IntakeProcessor:
                 pulse_config = self.config.get_pulse_api_config()
                 self.pulse_api_client = PulseAPIClient(
                     base_url=pulse_config["base_url"],
-                    org_id=config_org_id  # Use the same org ID that was used for tenant config
+                    org_name=x_org_name 
                 )
             except Exception as e:
                 error_msg = f"Failed to initialize pulse API client: {str(e)}"
