@@ -23,6 +23,7 @@ class PulseAPIClient:
         """
         self.base_url = base_url.rstrip('/')
         self.config = Config()
+        self.org_name = org_name
         
         org_resp = (
             self.config._get_supabase_client()
@@ -61,7 +62,7 @@ class PulseAPIClient:
         """
         try:
             files = {"file": (filename, content.encode('utf-8'), "text/plain")}
-            headers = {"x-org-name": self.org_id}
+            headers = {"x-org-name": self.org_name}
             
             # Add intake ID header if provided
             if intake_id:
