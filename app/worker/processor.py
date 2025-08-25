@@ -57,7 +57,7 @@ class IntakeProcessor:
             logger.info(f"Loading tenant configuration for org {config_org_id}")
             
             org_resp = (
-            Config._get_supabase_client()
+            self.client
             .table("orgs")
             .select("org_name")
             .eq("ord_id", org_id)
