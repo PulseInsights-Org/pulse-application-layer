@@ -23,6 +23,25 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="Intake to Ingest MVP")
+# 👇 configure this list for your environments
+ALLOWED_ORIGINS = [
+   "http://localhost:8080/"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "x-org-name",
+        "x-org-password",
+        "x-intake-id",
+        "x-idempotency-key",
+    ],
+)
 app.middleware("http")(tenant_middleware)
 app.include_router(intakes_router, prefix="/api", tags=["intakes"])
 app.include_router(uploads_router, prefix="/api", tags=["uploads"])
