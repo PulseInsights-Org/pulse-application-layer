@@ -90,7 +90,7 @@ async def scooby_query(internal: Request, request: QueryRequest):
 
 @app.get("/api/memories")
 async def get_memories(
-    x_org_name: str = Header(..., alias="x-org-id", description="Organization ID"),
+    x_org_name: str = Header(..., alias="x-org-name", description="Organization name"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(15, ge=1, le=100, description="Number of records per page")
 ):
