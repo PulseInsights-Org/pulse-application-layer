@@ -24,15 +24,20 @@ class PulseAPIClient:
         self.base_url = base_url.rstrip('/')
         self.config = Config()
         
-        self.org_id = (
+        org_resp = (
             self.config._get_supabase_client()
             .table("orgs")
             .select("id")
-            .eq("org_name", org_name) 
+            .eq("org_name", org_name)
             .execute()
-        ) 
+        )
+
+        from fastapi import HTTPException
+        if not org_resp.data:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        self.org_id = org_resp.data[0]["id"] 
         
-        self.config = Config()
         
         # Create HTTP client with timeout
         self.client = httpx.AsyncClient(
