@@ -14,7 +14,6 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
 DEFAULT_ORG_ID=your_org_id_here
 PULSE_API_BASE_URL=http://localhost:8001
-SCOOBY_URL=http://localhost:8000
 ```
 
 ### 2. Install Dependencies
@@ -37,6 +36,15 @@ The API will be available at `http://localhost:8001`
 
 ## API Endpoints
 
+### Core Endpoints
+```bash
+# Root endpoint
+curl -X GET "http://localhost:8001/"
+
+# Health check
+curl -X GET "http://localhost:8001/health"
+```
+
 ### Initialize Intake
 ```bash
 curl -X POST "http://localhost:8001/api/intakes/init" \
@@ -45,58 +53,91 @@ curl -X POST "http://localhost:8001/api/intakes/init" \
 ```
 **Note**: 
 - Ideally `x-idempotency-key` will be generated on the client side. For the sake for testing the API we are hardcoding this.
-- assuming x-org-id as `pulse-dev` change if required
+- assuming x-org-id as `832697dd-a913-405d-907a-a0c177d0746f` change if required
 
 ### Upload File (supports .txt and .md files)
 ```bash
 curl -X POST "http://localhost:8001/api/upload/file/{intake_id}" \
-  -H "x-org-id: pulse-dev" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f" \
   -F "file=@meeting-notes.txt"
 ```
+**Note**: 
+- will have to update the file path to point to an actual .txt or .md file
 
 ### Upload Text (uploading copy pasted text via UI)
 ```bash
 curl -X POST "http://localhost:8001/api/upload/text/{intake_id}" \
-  -H "x-org-id: pulse-dev" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f" \
   -F "text_content=Meeting summary: Discussed Q4 goals..."
 ```
 
 ### Get Intake Status
 ```bash
 curl -X GET "http://localhost:8001/api/intakes/{intake_id}" \
-  -H "x-org-id: pulse-dev"
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
 ```
 
 ### Finalize Intake (validates file exists, calculates checksum and size, then marks as ready)
 ```bash
 curl -X POST "http://localhost:8001/api/intakes/{intake_id}/finalize" \
-  -H "x-org-id: pulse-dev"
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
 ```
 
-## Pulse AI Integration
-
-The API now includes an endpoint for querying the Pulse AI bot which conencts Gemini Live. (for now only non-streaming)
-
-### Query Scooby
+### Worker Management
 ```bash
-curl -X POST "http://localhost:8001/api/scooby/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What was discussed about techpacks?"}'
+# Get worker status
+curl -X GET "http://localhost:8001/api/worker/status"
+
+# Manually process a specific intake
+curl -X POST "http://localhost:8001/api/worker/process/{intake_id}" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
+
+# Start worker
+curl -X POST "http://localhost:8001/api/worker/start"
+
+# Stop worker
+curl -X POST "http://localhost:8001/api/worker/stop"
 ```
 
-### Response Format
-- response - Response from the model 
-- status - Status of request
-- question - question to which response was generated
+### Query Endpoint
+```bash
+# Query PulseLive (Gemini) with streaming support
+curl -X POST "http://localhost:8001/api/query" \
+  -H "Content-Type: application/json" \
+    -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f" \
+  -d '{"question": "What was discussed about techpacks"}'
+```
+
+### Get Memories
+```bash
+# Get memories for an organization with pagination (default: page 1, page_size 15)
+curl -X GET "http://localhost:8001/api/memories" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
+
+# Get specific page with custom page size
+curl -X GET "http://localhost:8001/api/memories?page=1&page_size=2" \
+  -H "x-org-id: 832697dd-a913-405d-907a-a0c177d0746f"
+```
+**Note**: 
+- Returns memories with title, summary, and created_at
+- Default page size is 15 records per page
+- Maximum page size is 100 records
+- Results are ordered by created_at (newest first)
+- Increment page value to get next set of records (if they exist)
 
 ## Database Schema
 
 ### Intakes Table
 - `id`: UUID primary key
 - `org_id`: Organization identifier
-- `status`: Current status (initialized, ready, processing, done)
+- `status`: Current status (initialized, uploading, ready, processing, done, error-uploading)
 - `storage_path`: File storage path
+- `size_bytes`: File size in bytes
+- `checksum`: MD5 checksum of the file content
 - `idempotency_key`: Idempotency key
+- `attempts`: Number of processing attempts
+- `next_retry_at`: Next retry timestamp
+- `last_error`: Last error message
 - `created_at`: Creation timestamp
 - `updated_at`: Last update timestamp
 
@@ -131,7 +172,6 @@ The application includes a background worker system that automatically processes
 ```
 intakes-raw/org/pulse-dev/intake/{intake_id}/filename.txt
 ```
-
 
 ## Architecture
 
