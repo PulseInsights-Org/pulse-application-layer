@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.worker import manager as worker_manager
 from app.service.pulse import PulseLive
 from app.core.tools import GeminiTools
+from fastapi.middleware.cors import CORSMiddleware
 
 
 load_dotenv()
@@ -25,19 +26,19 @@ logging.basicConfig(
 app = FastAPI(title="Intake to Ingest MVP")
 # 👇 configure this list for your environments
 ALLOWED_ORIGINS = [
-   "http://localhost:8080/"
+    "http://localhost:8080",  
+    "http://127.0.0.1:8080",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,     
+    allow_credentials=True,            
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
         "Content-Type",
         "Authorization",
-        "x-org-name",
-        "x-org-id",   
+        "x-org-name",               
         "x-org-password",
         "x-intake-id",
         "x-idempotency-key",
