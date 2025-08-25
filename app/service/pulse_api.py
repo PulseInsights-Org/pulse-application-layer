@@ -22,9 +22,10 @@ class PulseAPIClient:
             org_id: Organization ID for tenant isolation
         """
         self.base_url = base_url.rstrip('/')
+        self.config = Config()
         
         self.org_id = (
-            Config._get_supabase_client()
+            self.config._get_supabase_client()
             .table("orgs")
             .select("id")
             .eq("org_name", org_name) 
