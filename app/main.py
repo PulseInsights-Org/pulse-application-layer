@@ -90,12 +90,28 @@ async def scooby_query(internal: Request, request: QueryRequest):
 
 @app.get("/api/memories")
 async def get_memories(
-    x_org_id: str = Header(..., alias="x-org-id", description="Organization ID"),
+    x_org_name: str = Header(..., alias="x-org-id", description="Organization ID"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(15, ge=1, le=100, description="Number of records per page")
 ):
     """Get memories for a specific organization with pagination."""
     try:
+        
+        resp = (
+            config._get_supabase_client()
+            .table("orgs")
+            .select("id")
+            .eq("org_name", x_org_name)
+            .single()
+            .execute()
+        )
+
+        if not resp.data:
+            raise HTTPException(status_code=404, detail=f"Org {x_org_name} not found")
+
+        x_org_id = resp.data["id"]
+        
+        
         # Calculate offset for pagination
         offset = (page - 1) * page_size
         
