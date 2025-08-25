@@ -28,6 +28,7 @@ app = FastAPI(title="Intake to Ingest MVP")
 ALLOWED_ORIGINS = [
     "http://localhost:8080",  
     "http://127.0.0.1:8080",
+    "https://dev-console.getpulseinsights.ai"
 ]
 
 app.add_middleware(
