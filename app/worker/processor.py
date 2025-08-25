@@ -43,7 +43,7 @@ class IntakeProcessor:
                 True if processing succeeded, False otherwise
         """
         intake_id = intake_data.get("id")
-        org_id = intake_data.get("org_id")
+        org_id = intake_data.get("org_id")       
         storage_path = intake_data.get("storage_path")
         checksum = intake_data.get("checksum")
         attempts = intake_data.get("attempts", 0)
@@ -56,7 +56,22 @@ class IntakeProcessor:
             config_org_id = self.config.default_org_id or org_id
             logger.info(f"Loading tenant configuration for org {config_org_id}")
             
-            if not self.config.load_tenant_secrets(config_org_id):
+            org_resp = (
+            Config._get_supabase_client()
+            .table("orgs")
+            .select("org_name")
+            .eq("ord_id", org_id)
+            .execute()
+            )
+
+            from fastapi import HTTPException
+            
+            if not org_resp.data:
+                raise HTTPException(status_code=404, detail="Organization not found")
+
+            x_org_name = org_resp.data[0]["org_name"]   
+            
+            if not self.config.load_tenant_secrets(x_org_name):
                 error_msg = f"Failed to load tenant configuration for org {config_org_id}"
                 logger.error(error_msg)
                 await self.db.schedule_retry(intake_id, attempts, error_msg)
