@@ -37,6 +37,7 @@ app.add_middleware(
         "Content-Type",
         "Authorization",
         "x-org-name",
+        "x-org-id",   
         "x-org-password",
         "x-intake-id",
         "x-idempotency-key",
