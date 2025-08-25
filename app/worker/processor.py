@@ -60,7 +60,7 @@ class IntakeProcessor:
             self.client
             .table("orgs")
             .select("org_name")
-            .eq("ord_id", org_id)
+            .eq("id", org_id)
             .execute()
             )
 
