@@ -115,19 +115,21 @@ class PulseLive():
                             function_args = fc.args
                             print("function called by gemini", function_name)
                             
+                            data = None  # ensure initialized to avoid unbound local on exceptions
                             try:
                                 if function_name == "connections_retrieval_tool":
-                                    event = function_args.get("event_names")
+                                    event = (function_args or {}).get("event_names")
                                     data = self.tool_executor.get_event_connections(event)
                                     
                                 elif function_name == "pc_retrieval_tool":
-                                    query = function_args.get("query")
+                                    query = (function_args or {}).get("query")
                                     data = self.tool_executor.pc_retrieval_tool(query)
                                 
                                 else:
                                     data = {"error": f"Unknown function: {function_name}"}
                                 
-                                print(data)
+                                if data is not None:
+                                    print(data)
                                     
                                 function_response = types.FunctionResponse(
                                     id=fc.id,

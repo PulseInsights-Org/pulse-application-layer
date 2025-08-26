@@ -5,6 +5,7 @@ Handles authentication, content upload, and response processing.
 
 import httpx
 import logging
+import json
 from typing import Dict, Any, Optional
 from app.core.config import Config
 
@@ -60,32 +61,53 @@ class PulseAPIClient:
         Returns:
             Extraction result dictionary if successful, None otherwise
         """
+        files = {"file": (filename, content.encode('utf-8'), "text/plain")}
+        headers = {"x-org-name": self.org_name}
+
+        # Add intake ID header if provided
+        if intake_id:
+            headers["x-intake-id"] = intake_id
+
+        url = f"{self.base_url}/api/v1/ingestion/"
+
+        logger.info(f"🔄 Sending content to pulse API: {url}")
+        logger.info(f"Content length: {len(content)} characters")
+        if intake_id:
+            logger.info(f"📋 Intake ID: {intake_id}")
+
         try:
-            files = {"file": (filename, content.encode('utf-8'), "text/plain")}
-            headers = {"x-org-name": self.org_name}
-            
-            # Add intake ID header if provided
-            if intake_id:
-                headers["x-intake-id"] = intake_id
-            
-            url = f"{self.base_url}/api/v1/ingestion/"
-            
-            logger.info(f"🔄 Sending content to pulse API: {url}")
-            logger.info(f"Content length: {len(content)} characters")
-            if intake_id:
-                logger.info(f"📋 Intake ID: {intake_id}")
-            
-            # Make the API call
-            response = await self.client.post(url, files=files, headers=headers)
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"✅ Extraction API call successful: {result.get('message', 'No message')}")
-                return result
-            else:
-                logger.error(f"❌ Extraction API call failed: {response.status_code} - {response.text}")
+            # Up to 3 attempts, retrying only on JSON parsing error
+            for attempt in range(1, 4):
+                response = await self.client.post(url, files=files, headers=headers)
+
+                if response.status_code in (200, 202):
+                    try:
+                        result = response.json()
+                        logger.info(
+                            f"✅ Extraction API call successful (status {response.status_code}): {result.get('message', 'No message')}"
+                        )
+                        return result
+                    except json.JSONDecodeError as je:
+                        snippet = response.text[:500] if response.text else ""
+                        if attempt < 3:
+                            logger.error(
+                                f"❌ Failed to parse extraction API response JSON (attempt {attempt}/3): {je}. Body snippet: {snippet}. Retrying..."
+                            )
+                            continue
+                        else:
+                            logger.error(
+                                f"❌ Failed to parse extraction API response JSON after 3 attempts: {je}. Body snippet: {snippet}"
+                            )
+                            return None
+
+                # Non-success status: do not add complexity; keep prior behavior
+                logger.error(
+                    f"❌ Extraction API call failed: {response.status_code} - {response.text}"
+                )
                 return None
-                
+
+            return None
+
         except httpx.TimeoutException:
             logger.error("❌ Extraction API call timed out")
             return None
