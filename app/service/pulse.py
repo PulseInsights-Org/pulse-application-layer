@@ -3,10 +3,12 @@ from app.core.tools import GeminiTools
 from google.genai.types import FunctionDeclaration
 from google.genai import types 
 from app.core.pulse_prompt import prompt_for_retrieval
+import os
 
 class PulseLive():
     
-    def __init__(self,  tools : GeminiTools, api_key = "AIzaSyBUjH-PkLSZzyDxFXeTlTw9s8PaZq2nNPc"):
+    def __init__(self,  tools : GeminiTools):
+        api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-live-2.5-flash-preview"
         self.tools = []
