@@ -3,10 +3,16 @@ from app.core.tools import GeminiTools
 from google.genai.types import FunctionDeclaration
 from google.genai import types 
 from app.core.pulse_prompt import prompt_for_retrieval
+import os
+from dotenv import load_dotenv
 
 class PulseLive():
     
-    def __init__(self,  tools : GeminiTools, api_key = "AIzaSyBUjH-PkLSZzyDxFXeTlTw9s8PaZq2nNPc"):
+    def __init__(self,  tools : GeminiTools):
+        load_dotenv()
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found in environment variables")
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-live-2.5-flash-preview"
         self.tools = []
